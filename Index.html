@@ -3,681 +3,481 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>ShapeFile Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.4/shp.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
 <style>
-  :root {
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --surface2: #f0f1f4;
-    --border: #dde0e8;
-    --border-strong: #c4c9d8;
-    --accent: #2563eb;
-    --accent2: #e11d48;
-    --accent3: #16a34a;
-    --accent-light: rgba(37,99,235,0.08);
-    --text: #111827;
-    --muted: #6b7280;
-    --card-bg: #ffffff;
-  }
+:root{--bg:#f5f6f8;--surface:#ffffff;--surface2:#f0f1f4;--border:#dde0e8;--border-strong:#c4c9d8;--accent:#2563eb;--accent2:#e11d48;--accent3:#16a34a;--accent-light:rgba(37,99,235,0.08);--text:#111827;--muted:#6b7280}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;height:100vh;overflow:hidden;display:grid;grid-template-rows:52px 1fr;grid-template-columns:320px 1fr 300px;grid-template-areas:"header header header" "left map right"}
+header{grid-area:header;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:14px;z-index:1000;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-0.5px;color:var(--accent)}.logo span{color:var(--text)}
+.header-divider{width:1px;height:22px;background:var(--border)}
+.status-pill{font-size:10px;padding:3px 10px;border-radius:20px;border:1px solid var(--border-strong);color:var(--muted);letter-spacing:1px;text-transform:uppercase;transition:all 0.3s}
+.status-pill.loaded{border-color:var(--accent3);color:var(--accent3);background:rgba(22,163,74,0.08)}
+.upload-btn{margin-left:auto;background:var(--accent);color:#fff;border:none;padding:7px 18px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.5px;cursor:pointer;clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%);transition:all 0.2s}
+.upload-btn:hover{background:#1d4ed8;transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,0.25)}
+#fileInput{display:none}
+.left-panel{grid-area:left;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.right-panel{grid-area:right;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+#map{grid-area:map;width:100%;height:100%;background:#e8edf2}
+.panel-title{font-family:'Syne',sans-serif;font-weight:800;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:2px}
+.stat-card{background:var(--surface2);border:1px solid var(--border);padding:11px 12px;position:relative;overflow:hidden;border-radius:4px}
+.stat-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent)}
+.stat-card.green::before{background:var(--accent3)}.stat-card.pink::before{background:var(--accent2)}
+.stat-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.stat-value{font-family:'Syne',sans-serif;font-weight:800;font-size:21px;color:var(--text);line-height:1}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:3px}
+.mini-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mini-stat{background:var(--surface2);border:1px solid var(--border);padding:9px;text-align:center;border-radius:4px}
+.mini-stat .val{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--accent)}
+.mini-stat .lbl{font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.field-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);margin-bottom:3px;font-size:11px;cursor:pointer;transition:border-color 0.2s,background 0.2s;border-radius:3px}
+.field-item:hover{border-color:var(--accent);background:var(--accent-light)}
+.field-item.active{border-color:var(--accent);background:var(--accent-light)}
+.field-name{color:var(--text);font-weight:700}
+.field-type{font-size:9px;padding:2px 6px;border-radius:3px;background:var(--border);color:var(--muted)}
+.field-type.num{background:rgba(37,99,235,0.1);color:var(--accent)}.field-type.str{background:rgba(225,29,72,0.08);color:var(--accent2)}
+.bar-chart{margin-top:4px}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:10px}
+.bar-label{width:80px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.bar-track{flex:1;height:12px;background:var(--border);position:relative;overflow:hidden;border-radius:2px}
+.bar-fill{height:100%;background:var(--accent);transition:width 0.5s cubic-bezier(.4,0,.2,1);border-radius:2px}
+.bar-count{width:38px;text-align:right;color:var(--muted);flex-shrink:0}
+.bbox-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:4px}
+.bbox-item{background:var(--surface2);border:1px solid var(--border);padding:7px;font-size:10px;border-radius:3px}
+.bbox-item .k{color:var(--muted);font-size:9px;letter-spacing:1px;text-transform:uppercase}
+.bbox-item .v{color:var(--accent3);font-weight:700;font-size:11px;margin-top:2px}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:var(--muted);gap:10px;padding:24px}
+.empty-icon{font-size:44px;opacity:0.25}
+.empty-title{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--muted)}
+.empty-sub{font-size:10px;line-height:1.6}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:2px}
+.loading-overlay{position:fixed;inset:0;background:rgba(245,246,248,0.85);display:none;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(2px)}
+.loading-box{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--accent);padding:30px 48px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.1);border-radius:6px}
+.spinner{width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;margin:0 auto 14px;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:'Syne',sans-serif;font-size:13px;color:var(--accent);letter-spacing:2px}
+#map.drag-over{outline:3px dashed var(--accent);outline-offset:-3px}
+.leaflet-popup-content-wrapper{background:var(--surface) !important;border:1px solid var(--border) !important;border-top:3px solid var(--accent) !important;border-radius:4px !important;box-shadow:0 4px 20px rgba(0,0,0,0.12) !important;color:var(--text) !important;font-family:'Space Mono',monospace !important;font-size:11px !important}
+.leaflet-popup-tip{background:var(--surface) !important}
+.popup-row{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)}
+.popup-key{color:var(--accent);font-weight:400;min-width:100px}
+.popup-val{color:var(--text);font-weight:700;word-break:break-all}
+.layer-item{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;margin-bottom:5px;font-size:11px;cursor:pointer;transition:border-color 0.15s,background 0.15s}
+.layer-item:hover{border-color:var(--accent)}.layer-item.active-layer{border-color:var(--accent);background:var(--accent-light)}
+.layer-swatch{width:11px;height:11px;border-radius:50%;flex-shrink:0;border:2px solid rgba(0,0,0,0.08)}
+.layer-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--text)}
+.layer-count{font-size:9px;color:var(--muted);flex-shrink:0}
+.layer-actions{display:flex;gap:3px;flex-shrink:0}
+.layer-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:10px;padding:2px 5px;cursor:pointer;font-family:'Space Mono',monospace;border-radius:2px;transition:all 0.15s;line-height:1.4}
+.layer-btn:hover{border-color:var(--accent);color:var(--accent)}
+.layer-btn.del-btn:hover{border-color:var(--accent2);background:rgba(225,29,72,0.06);color:var(--accent2)}
+.layer-btn.vis-btn.hidden-layer{opacity:0.45}
+.crs-badge{font-size:8px;padding:1px 5px;border-radius:2px;flex-shrink:0;letter-spacing:0.5px;font-weight:700;white-space:nowrap}
+.crs-badge.ok{background:rgba(22,163,74,0.1);color:var(--accent3);border:1px solid rgba(22,163,74,0.25)}
+.crs-badge.warn{background:rgba(217,119,6,0.1);color:#d97706;border:1px solid rgba(217,119,6,0.3)}
+.crs-badge.wgs{background:rgba(37,99,235,0.08);color:var(--accent);border:1px solid rgba(37,99,235,0.2)}
 
-  * { margin:0; padding:0; box-sizing:border-box; }
+/* CRS MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(17,24,39,0.45);display:none;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(3px)}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:6px;padding:28px 32px;width:520px;max-width:96vw;box-shadow:0 16px 48px rgba(0,0,0,0.18)}
+.modal-title{font-family:'Syne',sans-serif;font-weight:800;font-size:15px;margin-bottom:6px}
+.modal-sub{font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+.modal-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;margin-top:12px}
+.modal-select,.modal-input{width:100%;padding:8px 10px;font-family:'Space Mono',monospace;font-size:11px;border:1px solid var(--border-strong);border-radius:3px;background:var(--surface2);color:var(--text);outline:none}
+.modal-select:focus,.modal-input:focus{border-color:var(--accent)}
+.modal-prj{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:8px;font-size:10px;color:var(--muted);word-break:break-all;max-height:60px;overflow-y:auto;margin-top:4px;font-family:'Space Mono',monospace}
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+.modal-btn{padding:8px 20px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;transition:all 0.15s}
+.modal-btn.primary{background:var(--accent);color:#fff;border:none}.modal-btn.primary:hover{background:#1d4ed8}
+.modal-btn.secondary{background:none;border:1px solid var(--border-strong);color:var(--muted)}.modal-btn.secondary:hover{border-color:var(--accent);color:var(--accent)}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Space Mono', monospace;
-    height: 100vh;
-    overflow: hidden;
-    display: grid;
-    grid-template-rows: 52px 1fr;
-    grid-template-columns: 320px 1fr 300px;
-    grid-template-areas:
-      "header header header"
-      "left   map    right";
-  }
-
-  /* HEADER */
-  header {
-    grid-area: header;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    gap: 14px;
-    position: relative;
-    z-index: 1000;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  }
-
-  .logo {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 17px;
-    letter-spacing: -0.5px;
-    color: var(--accent);
-  }
-
-  .logo span { color: var(--text); }
-
-  .header-divider {
-    width: 1px;
-    height: 22px;
-    background: var(--border);
-  }
-
-  .status-pill {
-    font-size: 10px;
-    padding: 3px 10px;
-    border-radius: 20px;
-    border: 1px solid var(--border-strong);
-    color: var(--muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    transition: all 0.3s;
-  }
-
-  .status-pill.loaded {
-    border-color: var(--accent3);
-    color: var(--accent3);
-    background: rgba(22,163,74,0.08);
-  }
-
-  .upload-btn {
-    margin-left: auto;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    padding: 7px 18px;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
-    transition: all 0.2s;
-  }
-
-  .upload-btn:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
-
-  #fileInput { display: none; }
-
-  /* LEFT PANEL */
-  .left-panel {
-    grid-area: left;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    overflow-y: auto;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  /* RIGHT PANEL */
-  .right-panel {
-    grid-area: right;
-    background: var(--surface);
-    border-left: 1px solid var(--border);
-    overflow-y: auto;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  /* MAP */
-  #map {
-    grid-area: map;
-    width: 100%;
-    height: 100%;
-    background: #e8edf2;
-  }
-
-  /* PANEL SECTIONS */
-  .panel-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 10px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--muted);
-    padding-bottom: 7px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 2px;
-  }
-
-  .stat-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    padding: 11px 12px;
-    position: relative;
-    overflow: hidden;
-    border-radius: 4px;
-  }
-
-  .stat-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 3px;
-    height: 100%;
-    background: var(--accent);
-  }
-
-  .stat-card.green::before { background: var(--accent3); }
-  .stat-card.pink::before { background: var(--accent2); }
-
-  .stat-label {
-    font-size: 9px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 3px;
-  }
-
-  .stat-value {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 21px;
-    color: var(--text);
-    line-height: 1;
-  }
-
-  .stat-sub {
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 3px;
-  }
-
-  .mini-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-  }
-
-  .mini-stat {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    padding: 9px;
-    text-align: center;
-    border-radius: 4px;
-  }
-
-  .mini-stat .val {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 14px;
-    color: var(--accent);
-  }
-
-  .mini-stat .lbl {
-    font-size: 9px;
-    color: var(--muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-top: 2px;
-  }
-
-  /* FIELD LIST */
-  .field-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 7px 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    margin-bottom: 3px;
-    font-size: 11px;
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
-    border-radius: 3px;
-  }
-
-  .field-item:hover { border-color: var(--accent); background: var(--accent-light); }
-  .field-item.active { border-color: var(--accent); background: var(--accent-light); }
-
-  .field-name { color: var(--text); font-weight: 700; }
-  .field-type {
-    font-size: 9px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--border);
-    color: var(--muted);
-    letter-spacing: 0.5px;
-  }
-
-  .field-type.num { background: rgba(37,99,235,0.1); color: var(--accent); }
-  .field-type.str { background: rgba(225,29,72,0.08); color: var(--accent2); }
-
-  /* BAR CHART */
-  .bar-chart { margin-top: 4px; }
-  .bar-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 5px;
-    font-size: 10px;
-  }
-  .bar-label { width: 80px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
-  .bar-track { flex: 1; height: 12px; background: var(--border); position: relative; overflow: hidden; border-radius: 2px; }
-  .bar-fill { height: 100%; background: var(--accent); transition: width 0.5s cubic-bezier(.4,0,.2,1); border-radius: 2px; }
-  .bar-count { width: 38px; text-align: right; color: var(--muted); flex-shrink: 0; }
-
-  /* BBOX */
-  .bbox-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 5px;
-    margin-top: 4px;
-  }
-
-  .bbox-item {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    padding: 7px;
-    font-size: 10px;
-    border-radius: 3px;
-  }
-
-  .bbox-item .k { color: var(--muted); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
-  .bbox-item .v { color: var(--accent3); font-weight: 700; font-size: 11px; margin-top: 2px; }
-
-  /* EMPTY STATE */
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    text-align: center;
-    color: var(--muted);
-    gap: 10px;
-    padding: 24px;
-  }
-
-  .empty-icon {
-    font-size: 44px;
-    opacity: 0.25;
-  }
-
-  .empty-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .empty-sub { font-size: 10px; line-height: 1.6; }
-
-  /* SCROLLBAR */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
-
-  /* LOADING */
-  .loading-overlay {
-    position: fixed; inset: 0;
-    background: rgba(245,246,248,0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    display: none;
-    backdrop-filter: blur(2px);
-  }
-
-  .loading-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-top: 3px solid var(--accent);
-    padding: 30px 48px;
-    text-align: center;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-    border-radius: 6px;
-  }
-
-  .spinner {
-    width: 36px;
-    height: 36px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    margin: 0 auto 14px;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .loading-text {
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
-    color: var(--accent);
-    letter-spacing: 2px;
-  }
-
-  /* DROP ZONE */
-  #map.drag-over::after {
-    content: 'DROP SHAPEFILE ZIP';
-    position: absolute;
-    inset: 0;
-    background: rgba(37,99,235,0.07);
-    border: 3px dashed var(--accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Syne', sans-serif;
-    font-size: 22px;
-    font-weight: 800;
-    color: var(--accent);
-    letter-spacing: 4px;
-    z-index: 9998;
-    pointer-events: none;
-  }
-
-  /* FEATURE POPUP */
-  .leaflet-popup-content-wrapper {
-    background: var(--surface) !important;
-    border: 1px solid var(--border) !important;
-    border-top: 3px solid var(--accent) !important;
-    border-radius: 4px !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
-    color: var(--text) !important;
-    font-family: 'Space Mono', monospace !important;
-    font-size: 11px !important;
-    max-height: 300px;
-    overflow-y: auto;
-  }
-
-  .leaflet-popup-tip { background: var(--surface) !important; }
-
-  .popup-row { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); }
-  .popup-key { color: var(--accent); font-weight: 700; min-width: 100px; }
-  .popup-val { color: var(--text); word-break: break-all; }
-
-  /* LAYER MANAGER */
-  .layer-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    margin-bottom: 5px;
-    font-size: 11px;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .layer-item:hover { border-color: var(--accent); }
-  .layer-item.active-layer { border-color: var(--accent); background: var(--accent-light); }
-
-  .layer-swatch {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    border: 2px solid rgba(0,0,0,0.08);
-  }
-
-  .layer-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .layer-count {
-    font-size: 9px;
-    color: var(--muted);
-    flex-shrink: 0;
-  }
-
-  .layer-actions {
-    display: flex;
-    gap: 4px;
-    margin-left: auto;
-    flex-shrink: 0;
-  }
-
-  .layer-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 10px;
-    padding: 2px 6px;
-    cursor: pointer;
-    font-family: 'Space Mono', monospace;
-    border-radius: 2px;
-    transition: all 0.15s;
-    line-height: 1.4;
-  }
-
-  .layer-btn:hover { border-color: var(--accent2); color: var(--accent2); }
-  .layer-btn.vis-btn { border-color: var(--border-strong); color: var(--text); }
-  .layer-btn.vis-btn.hidden-layer { opacity: 0.45; }
-  .layer-btn.del-btn:hover { border-color: var(--accent2); background: rgba(225,29,72,0.06); }
-
-  .no-layers-msg {
-    font-size: 10px;
-    color: var(--muted);
-    text-align: center;
-    padding: 14px 0 6px;
-  }
-
-  /* Active layer tab styling in left panel */
-  .layer-tab {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-    margin-bottom: 4px;
-  }
-
-  .layer-tab-btn {
-    font-family: 'Space Mono', monospace;
-    font-size: 9px;
-    padding: 3px 8px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    white-space: nowrap;
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .layer-tab-btn.active {
-    border-color: var(--accent);
-    background: var(--accent-light);
-    color: var(--accent);
-    font-weight: 700;
-  }
-
-  .layer-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
+/* TABLE MODAL */
+.table-modal-overlay{position:fixed;inset:0;background:rgba(17,24,39,0.5);display:none;align-items:flex-start;justify-content:center;z-index:10001;backdrop-filter:blur(3px);padding:32px 24px}
+.table-modal-overlay.open{display:flex}
+.table-modal-box{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:6px;width:100%;max-width:1100px;max-height:calc(100vh - 64px);display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,0.2);overflow:hidden}
+.table-modal-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.table-modal-title{font-family:'Syne',sans-serif;font-weight:800;font-size:14px;flex:1}
+.table-modal-meta{font-size:10px;color:var(--muted)}
+.table-export-btns{display:flex;gap:8px}
+.export-btn{padding:5px 14px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;border-radius:3px;transition:all 0.15s;border:1px solid var(--border-strong);background:var(--surface2);color:var(--text)}
+.export-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-light)}
+.export-btn.geojson-btn:hover{border-color:var(--accent3);color:var(--accent3);background:rgba(22,163,74,0.07)}
+.table-close-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:14px;width:28px;height:28px;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.table-close-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.table-search-bar{padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;align-items:center}
+.table-search-input{flex:1;padding:6px 10px;font-family:'Space Mono',monospace;font-size:11px;border:1px solid var(--border-strong);border-radius:3px;background:var(--surface2);color:var(--text);outline:none}
+.table-search-input:focus{border-color:var(--accent)}
+.table-search-count{font-size:10px;color:var(--muted);white-space:nowrap}
+.table-scroll{overflow:auto;flex:1}
+table.data-table{width:100%;border-collapse:collapse;font-size:11px}
+table.data-table thead{position:sticky;top:0;z-index:2}
+table.data-table th{background:var(--surface2);border-bottom:2px solid var(--border-strong);border-right:1px solid var(--border);padding:8px 10px;text-align:left;font-size:10px;letter-spacing:0.5px;font-weight:700;cursor:pointer;user-select:none;white-space:nowrap;color:var(--text)}
+table.data-table th:hover{background:var(--accent-light);color:var(--accent)}
+table.data-table th.sort-asc::after{content:' ↑';color:var(--accent)}
+table.data-table th.sort-desc::after{content:' ↓';color:var(--accent)}
+table.data-table td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:6px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+table.data-table tr:hover td{background:var(--accent-light)}
+table.data-table tr:nth-child(even) td{background:var(--surface2)}
+table.data-table tr:nth-child(even):hover td{background:var(--accent-light)}
+.table-footer{padding:8px 16px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);flex-shrink:0;display:flex;align-items:center;gap:16px}
+.page-btn{background:none;border:1px solid var(--border);padding:3px 10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;border-radius:2px;color:var(--text);transition:all 0.15s}
+.page-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.page-btn:disabled{opacity:0.35;cursor:default}
 </style>
 </head>
 <body>
-
 <header>
   <div class="logo">Shape<span>Explorer</span></div>
   <div class="header-divider"></div>
   <div class="status-pill" id="statusPill">NO FILES LOADED</div>
-  <button class="upload-btn" onclick="document.getElementById('fileInput').click()">⬆ ADD .ZIP LAYER</button>
+  <button class="upload-btn" onclick="document.getElementById('fileInput').click()">&#8679; ADD .ZIP LAYER</button>
   <input type="file" id="fileInput" accept=".zip" multiple>
 </header>
 
 <div class="left-panel" id="leftPanel">
   <div class="empty-state" id="leftEmptyState">
-    <div class="empty-icon">🗂</div>
+    <div class="empty-icon">&#128194;</div>
     <div class="empty-title">No Dataset Loaded</div>
     <div class="empty-sub">Upload a .zip containing<br>.shp, .dbf, .prj files<br>to begin exploration</div>
   </div>
-  <div id="leftContent" style="display:none; display:flex; flex-direction:column; gap:10px;"></div>
+  <div id="leftContent" style="display:none;flex-direction:column;gap:10px;"></div>
 </div>
 
 <div id="map"></div>
 
-<div class="right-panel" id="rightPanel">
+<div class="right-panel">
   <div class="empty-state" id="rightEmptyState">
-    <div class="empty-icon">📊</div>
+    <div class="empty-icon">&#128202;</div>
     <div class="empty-title">No Analysis Yet</div>
     <div class="empty-sub">Load a shapefile to see<br>field analysis and<br>data distributions</div>
   </div>
-  <div id="rightContent" style="display:none; flex-direction:column; gap:10px;"></div>
+  <div id="rightContent" style="display:none;flex-direction:column;gap:10px;"></div>
 </div>
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-box">
     <div class="spinner"></div>
-    <div class="loading-text">PARSING SHAPEFILE</div>
+    <div class="loading-text" id="loadingText">PARSING SHAPEFILE</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="crsModal">
+  <div class="modal-box">
+    <div class="modal-title">&#9888;&#65039; CRS Not Detected</div>
+    <div class="modal-sub" id="crsModalSub"></div>
+    <div id="prjFoundBlock" style="display:none">
+      <div class="modal-label">Detected .prj content</div>
+      <div class="modal-prj" id="prjPreview"></div>
+    </div>
+    <div class="modal-label">Select Common CRS</div>
+    <select class="modal-select" id="crsSelect" onchange="onCrsSelectChange()">
+      <option value="">-- choose a preset --</option>
+      <optgroup label="Geographic (Lat/Lon)">
+        <option value="WGS84">WGS 84 (EPSG:4326) -- no reprojection needed</option>
+        <option value="GDA94">GDA 94 (EPSG:4283) -- Australia</option>
+        <option value="GDA2020">GDA 2020 (EPSG:7844) -- Australia</option>
+        <option value="NAD83">NAD 83 (EPSG:4269) -- North America</option>
+        <option value="NAD27">NAD 27 (EPSG:4267) -- North America</option>
+        <option value="ETRS89">ETRS 89 (EPSG:4258) -- Europe</option>
+      </optgroup>
+      <optgroup label="Projected - Australian (MGA94)">
+        <option value="MGA94_49">MGA 94 Zone 49 (EPSG:28349)</option>
+        <option value="MGA94_50">MGA 94 Zone 50 (EPSG:28350)</option>
+        <option value="MGA94_51">MGA 94 Zone 51 (EPSG:28351)</option>
+        <option value="MGA94_52">MGA 94 Zone 52 (EPSG:28352)</option>
+        <option value="MGA94_53">MGA 94 Zone 53 (EPSG:28353)</option>
+        <option value="MGA94_54">MGA 94 Zone 54 (EPSG:28354)</option>
+        <option value="MGA94_55">MGA 94 Zone 55 (EPSG:28355)</option>
+        <option value="MGA94_56">MGA 94 Zone 56 (EPSG:28356)</option>
+      </optgroup>
+      <optgroup label="Projected - Australian (MGA2020)">
+        <option value="MGA2020_54">MGA 2020 Zone 54 (EPSG:7854)</option>
+        <option value="MGA2020_55">MGA 2020 Zone 55 (EPSG:7855)</option>
+        <option value="MGA2020_56">MGA 2020 Zone 56 (EPSG:7856)</option>
+      </optgroup>
+      <optgroup label="Projected - Global">
+        <option value="WGS84_UTM30N">WGS84 UTM Zone 30N (EPSG:32630)</option>
+        <option value="WGS84_UTM33N">WGS84 UTM Zone 33N (EPSG:32633)</option>
+        <option value="WGS84_UTM55S">WGS84 UTM Zone 55S (EPSG:32755)</option>
+        <option value="WebMercator">Web Mercator (EPSG:3857)</option>
+        <option value="OSGB36">British National Grid (EPSG:27700)</option>
+      </optgroup>
+      <option value="custom">Custom proj4 string...</option>
+    </select>
+    <div id="customProj4Block" style="display:none">
+      <div class="modal-label">Custom proj4 string</div>
+      <input class="modal-input" id="customProj4Input" placeholder="+proj=utm +zone=55 +south +datum=GDA94 +units=m +no_defs">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeCrsModal(false)">Skip (assume WGS84)</button>
+      <button class="modal-btn primary" onclick="closeCrsModal(true)">Apply and Load</button>
+    </div>
+  </div>
+</div>
+
+<div class="table-modal-overlay" id="tableModal">
+  <div class="table-modal-box">
+    <div class="table-modal-header">
+      <div class="table-modal-title" id="tableModalTitle">--</div>
+      <div class="table-modal-meta" id="tableModalMeta"></div>
+      <div class="table-export-btns">
+        <button class="export-btn" onclick="exportCSV()">&#8595; Export CSV</button>
+        <button class="export-btn geojson-btn" onclick="exportGeoJSON()">&#8595; Export GeoJSON</button>
+      </div>
+      <button class="table-close-btn" onclick="closeTableModal()">&#x2715;</button>
+    </div>
+    <div class="table-search-bar">
+      <input class="table-search-input" id="tableSearchInput" placeholder="Search all columns..." oninput="onTableSearch()">
+      <div class="table-search-count" id="tableSearchCount"></div>
+    </div>
+    <div class="table-scroll" id="tableScrollArea"></div>
+    <div class="table-footer">
+      <button class="page-btn" id="pagePrev" onclick="changePage(-1)">&#9664; Prev</button>
+      <span id="pageInfo">Page 1</span>
+      <button class="page-btn" id="pageNext" onclick="changePage(1)">Next &#9654;</button>
+      <span style="margin-left:auto" id="tableRowCount"></span>
+    </div>
   </div>
 </div>
 
 <script>
-// Init map
-const map = L.map('map', {
-  center: [20, 0],
-  zoom: 2,
-  zoomControl: true,
-  attributionControl: true
-});
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
+// Attribution control enabled by default or explicitly true
+const map = L.map('map', {center:[20,0],zoom:2,zoomControl:true});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
 
-// Layer palette — distinct, accessible on white
-const LAYER_PALETTE = [
-  '#2563eb','#e11d48','#16a34a','#d97706','#7c3aed',
-  '#0891b2','#be185d','#065f46','#b45309','#4338ca'
-];
+// Proj4 definitions
+const PROJ4_DEFS = {
+  WGS84:'+proj=longlat +datum=WGS84 +no_defs',
+  GDA94:'+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs',
+  GDA2020:'+proj=longlat +ellps=GRS80 +no_defs',
+  NAD83:'+proj=longlat +datum=NAD83 +no_defs',
+  NAD27:'+proj=longlat +datum=NAD27 +no_defs',
+  ETRS89:'+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs',
+  MGA94_49:'+proj=utm +zone=49 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_50:'+proj=utm +zone=50 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_51:'+proj=utm +zone=51 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_52:'+proj=utm +zone=52 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_53:'+proj=utm +zone=53 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_54:'+proj=utm +zone=54 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_55:'+proj=utm +zone=55 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA94_56:'+proj=utm +zone=56 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+  MGA2020_54:'+proj=utm +zone=54 +south +ellps=GRS80 +units=m +no_defs',
+  MGA2020_55:'+proj=utm +zone=55 +south +ellps=GRS80 +units=m +no_defs',
+  MGA2020_56:'+proj=utm +zone=56 +south +ellps=GRS80 +units=m +no_defs',
+  WGS84_UTM30N:'+proj=utm +zone=30 +datum=WGS84 +units=m +no_defs',
+  WGS84_UTM33N:'+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs',
+  WGS84_UTM55S:'+proj=utm +zone=55 +south +datum=WGS84 +units=m +no_defs',
+  WebMercator:'+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +no_defs',
+  OSGB36:'+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs'
+};
+Object.entries(PROJ4_DEFS).forEach(([k,v]) => proj4.defs(k,v));
 
-const COLORS = LAYER_PALETTE; // reuse for bar charts
+const LAYER_PALETTE = ['#2563eb','#e11d48','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#065f46','#b45309','#4338ca'];
+const COLORS = LAYER_PALETTE;
 
-// Multi-layer state
-let datasets = []; // { id, name, geojson, layer, color, visible, fieldData, fields, features }
-let activeDatasetId = null;
-let layerIdCounter = 0;
+let datasets = [], activeDatasetId = null, layerIdCounter = 0;
+let crsResolve = null;
+let tableDs = null, tableFilteredRows = [], tableSortCol = null, tableSortDir = 1, tablePage = 0;
+const PAGE_SIZE = 100;
 
-// File input — supports multiple
+// File input
 document.getElementById('fileInput').addEventListener('change', e => {
   const files = Array.from(e.target.files);
   if (files.length) loadShapefiles(files);
   e.target.value = '';
 });
-
-// Drag & drop on map
 const mapEl = document.getElementById('map');
 mapEl.addEventListener('dragover', e => { e.preventDefault(); mapEl.classList.add('drag-over'); });
 mapEl.addEventListener('dragleave', () => mapEl.classList.remove('drag-over'));
 mapEl.addEventListener('drop', e => {
-  e.preventDefault();
-  mapEl.classList.remove('drag-over');
+  e.preventDefault(); mapEl.classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.zip'));
   if (files.length) loadShapefiles(files);
 });
 
 async function loadShapefiles(files) {
-  document.getElementById('loadingOverlay').style.display = 'flex';
   for (const file of files) {
     try {
+      setLoading(true, 'READING ' + file.name.toUpperCase());
       const buffer = await file.arrayBuffer();
-      const geojson_raw = await shp(buffer);
-      const geojson = Array.isArray(geojson_raw) ? geojson_raw[0] : geojson_raw;
+
+      // Extract .prj
+      setLoading(true, 'DETECTING CRS');
+      const prjString = await extractPrj(buffer);
+      let proj4Str = null, crsLabel = 'WGS84', crsSource = 'assumed';
+
+      if (prjString) {
+        if (isWgs84Prj(prjString)) {
+          proj4Str = null; crsLabel = 'WGS84'; crsSource = 'prj';
+        } else {
+          // Try to parse .prj directly
+          try {
+            proj4(prjString, 'WGS84', [0,0]); // test parse
+            proj4Str = prjString;
+            crsLabel = detectCrsLabel(prjString);
+            crsSource = 'prj';
+          } catch(e) {
+            // Unparseable .prj — ask user
+            const result = await askUserCrs(file.name, prjString);
+            proj4Str = result.proj4; crsLabel = result.label; crsSource = 'user';
+          }
+        }
+      } else {
+        // No .prj — ask user
+        const result = await askUserCrs(file.name, null);
+        proj4Str = result.proj4; crsLabel = result.label; crsSource = 'user';
+      }
+
+      setLoading(true, 'PARSING SHAPEFILE');
+      const raw = await shp(buffer);
+      let geojson = Array.isArray(raw) ? raw[0] : raw;
+
+      // Check if shpjs already projected the data to WGS84 automatically
+      let isAlreadyWgs84 = false;
+      const firstGeom = geojson.features.find(f => f.geometry)?.geometry;
+      if (firstGeom) {
+          const firstCoord = flatCoords(firstGeom)[0];
+          if (firstCoord && Math.abs(firstCoord[0]) <= 180 && Math.abs(firstCoord[1]) <= 90) {
+              isAlreadyWgs84 = true;
+          }
+      }
+
+      if (proj4Str && crsLabel !== 'WGS84' && !isAlreadyWgs84) {
+        setLoading(true, 'REPROJECTING TO WGS84');
+        geojson = reprojectGeoJSON(geojson, proj4Str);
+      }
+
       const id = ++layerIdCounter;
-      const color = LAYER_PALETTE[(datasets.length) % LAYER_PALETTE.length];
-      const ds = {
-        id,
-        name: file.name.replace(/\.zip$/i,''),
-        geojson,
-        layer: null,
-        color,
-        visible: true,
-        fieldData: null,
-        fields: [],
-        features: geojson.features
-      };
+      const color = LAYER_PALETTE[datasets.length % LAYER_PALETTE.length];
+      const ds = { id, name:file.name.replace(/\.zip$/i,''), geojson, layer:null, color, visible:true,
+                   fieldData:null, fields:[], features:geojson.features, crsLabel, crsSource, prjString };
       ds.layer = buildMapLayer(ds);
       ds.layer.addTo(map);
       analyseDataset(ds);
       datasets.push(ds);
       activeDatasetId = id;
     } catch(err) {
-      alert('Error loading ' + file.name + ': ' + err.message);
+      setLoading(false);
+      alert('Error loading ' + file.name + ':\n' + err.message);
       console.error(err);
     }
   }
-  document.getElementById('loadingOverlay').style.display = 'none';
-
+  setLoading(false);
   if (datasets.length > 0) {
-    document.getElementById('statusPill').textContent = datasets.length + ' LAYER' + (datasets.length > 1 ? 'S' : '') + ' LOADED';
-    document.getElementById('statusPill').classList.add('loaded');
-    updatePanels();
-    // Fit to all layers
-    try {
-      const group = L.featureGroup(datasets.map(d => d.layer));
-      map.fitBounds(group.getBounds(), { padding: [24, 24] });
-    } catch(e) {}
+    updateStatusPill(); updatePanels();
+    try { map.fitBounds(L.featureGroup(datasets.filter(d=>d.visible).map(d=>d.layer)).getBounds(), {padding:[24,24]}); } catch(e){}
   }
+}
+
+async function extractPrj(buffer) {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const f = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.prj'));
+    if (f) return await f.async('text');
+  } catch(e){}
+  return null;
+}
+
+function isWgs84Prj(prj) {
+  if (!prj) return false;
+  const p = prj.toUpperCase();
+  return (p.includes('WGS_1984') || p.includes('WGS84') || p.includes('WGS 84')) && p.includes('GEOGCS') && !p.includes('PROJCS');
+}
+
+function detectCrsLabel(prj) {
+  if (!prj) return 'Unknown';
+  const p = prj.toUpperCase();
+  if (p.includes('GDA_2020') || p.includes('GDA2020')) return 'GDA2020';
+  if (p.includes('GDA_1994') || p.includes('GDA94')) return 'GDA94';
+  if (p.includes('MGA')) { const m = prj.match(/zone[_\s]*(\d+)/i); return 'MGA'+(m?' Z'+m[1]:''); }
+  if (p.includes('WGS_1984') || p.includes('WGS84')) return 'WGS84';
+  if (p.includes('NAD_1983') || p.includes('NAD83')) return 'NAD83';
+  if (p.includes('NAD_1927') || p.includes('NAD27')) return 'NAD27';
+  if (p.includes('BRITISH_NATIONAL') || p.includes('OSGB')) return 'BNG';
+  const m = prj.match(/"([^"]+)"/);
+  return m ? m[1].substring(0,14) : 'Custom';
+}
+
+function askUserCrs(filename, prjString) {
+  return new Promise(resolve => {
+    crsResolve = resolve;
+    const sub = document.getElementById('crsModalSub');
+    const prjBlock = document.getElementById('prjFoundBlock');
+    if (prjString) {
+      sub.textContent = 'A .prj file was found in "'+filename+'" but could not be automatically parsed. Select the closest CRS below or enter a custom proj4 string.';
+      prjBlock.style.display = 'block';
+      document.getElementById('prjPreview').textContent = prjString;
+    } else {
+      sub.textContent = 'No .prj file was found in "'+filename+'". Define the coordinate reference system so the layer can be correctly reprojected to WGS84 for display on the map.';
+      prjBlock.style.display = 'none';
+    }
+    document.getElementById('crsSelect').value = '';
+    document.getElementById('customProj4Block').style.display = 'none';
+    document.getElementById('crsModal').classList.add('open');
+  });
+}
+
+function onCrsSelectChange() {
+  document.getElementById('customProj4Block').style.display = document.getElementById('crsSelect').value === 'custom' ? 'block' : 'none';
+}
+
+function closeCrsModal(apply) {
+  document.getElementById('crsModal').classList.remove('open');
+  if (!crsResolve) return;
+  if (!apply) { crsResolve({proj4:null,label:'WGS84'}); crsResolve=null; return; }
+  const sel = document.getElementById('crsSelect').value;
+  if (!sel) { crsResolve({proj4:null,label:'WGS84'}); crsResolve=null; return; }
+  let proj4Str, label;
+  if (sel === 'custom') {
+    proj4Str = document.getElementById('customProj4Input').value.trim();
+    label = 'Custom';
+  } else if (sel === 'WGS84') {
+    proj4Str = null; label = 'WGS84';
+  } else {
+    proj4Str = PROJ4_DEFS[sel]; label = sel.replace(/_/g,' ');
+  }
+  crsResolve({proj4:proj4Str,label}); crsResolve = null;
+}
+
+function reprojectGeoJSON(geojson, fromProj4) {
+  const rc = ([x,y]) => { const [lng,lat] = proj4(fromProj4,'WGS84',[x,y]); return [lng,lat]; };
+  const rr = ring => ring.map(rc);
+  function rg(geom) {
+    switch(geom.type) {
+      case 'Point': return {...geom, coordinates:rc(geom.coordinates)};
+      case 'MultiPoint': case 'LineString': return {...geom, coordinates:geom.coordinates.map(rc)};
+      case 'MultiLineString': case 'Polygon': return {...geom, coordinates:geom.coordinates.map(rr)};
+      case 'MultiPolygon': return {...geom, coordinates:geom.coordinates.map(p=>p.map(rr))};
+      case 'GeometryCollection': return {...geom, geometries:geom.geometries.map(rg)};
+      default: return geom;
+    }
+  }
+  return {...geojson, features: geojson.features.map(f => f.geometry ? {...f,geometry:rg(f.geometry)} : f)};
 }
 
 function buildMapLayer(ds) {
   return L.geoJSON(ds.geojson, {
-    style: () => ({
-      color: ds.color,
-      weight: 1.5,
-      opacity: 0.9,
-      fillColor: ds.color,
-      fillOpacity: 0.15
-    }),
-    pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-      radius: 5,
-      fillColor: ds.color,
-      color: ds.color,
-      weight: 1.5,
-      opacity: 1,
-      fillOpacity: 0.55
-    }),
+    style: () => ({color:ds.color,weight:1.5,opacity:0.9,fillColor:ds.color,fillOpacity:0.15}),
+    pointToLayer: (f,ll) => L.circleMarker(ll,{radius:5,fillColor:ds.color,color:ds.color,weight:1.5,opacity:1,fillOpacity:0.55}),
     onEachFeature: (feature, layer) => {
       layer.on({
-        mouseover: e => {
-          e.target.setStyle && e.target.setStyle({ fillOpacity: 0.45, weight: 2.5 });
-        },
-        mouseout: e => {
-          ds.layer && ds.layer.resetStyle(e.target);
-        },
+        mouseover: e => { e.target.setStyle && e.target.setStyle({fillOpacity:0.45,weight:2.5}); },
+        mouseout: e => { ds.layer && ds.layer.resetStyle(e.target); },
         click: e => {
-          if (activeDatasetId !== ds.id) {
-            activeDatasetId = ds.id;
-            updatePanels();
-          }
-          const props = feature.properties || {};
-          const rows = Object.entries(props).map(([k,v]) =>
-            `<div class="popup-row"><span class="popup-key">${k}</span><span class="popup-val">${v ?? 'null'}</span></div>`
-          ).join('');
-          L.popup().setLatLng(e.latlng)
-            .setContent(`<div style="font-family:'Space Mono',monospace;font-size:11px;max-height:260px;overflow-y:auto;color:var(--text)">${rows || '<span style="color:var(--muted)">No attributes</span>'}</div>`)
-            .openOn(map);
+          if (activeDatasetId !== ds.id) { activeDatasetId=ds.id; updatePanels(); }
+          const props = feature.properties||{};
+          const rows = Object.entries(props).map(([k,v])=>'<div class="popup-row"><span class="popup-key">'+k+'</span><span class="popup-val">'+(v??'null')+'</span></div>').join('');
+          L.popup().setLatLng(e.latlng).setContent('<div style="font-family:Space Mono,monospace;font-size:11px;max-height:260px;overflow-y:auto">'+(rows||'<span style="color:var(--muted)">No attributes</span>')+'</div>').openOn(map);
         }
       });
     }
@@ -686,354 +486,258 @@ function buildMapLayer(ds) {
 
 function analyseDataset(ds) {
   const features = ds.features;
-  const n = features.length;
-  const props = features[0]?.properties || {};
-  const fields = Object.keys(props);
+  const fields = Object.keys(features[0]?.properties||{});
   ds.fields = fields;
-
-  const fieldData = {};
+  const fd = {};
   fields.forEach(field => {
-    const values = features.map(f => f.properties?.[field]);
-    const type = getFieldType(values);
-    fieldData[field] = { type, values };
-
-    if (type === 'numeric') {
-      const nums = values.map(Number).filter(v => !isNaN(v));
-      const sorted = [...nums].sort((a,b) => a-b);
-      fieldData[field].stats = {
-        min: sorted[0],
-        max: sorted[sorted.length-1],
-        mean: nums.reduce((a,b)=>a+b,0)/nums.length,
-        median: sorted[Math.floor(sorted.length/2)],
-        nullCount: values.filter(v => v === null || v === undefined || v === '').length
-      };
+    const vals = features.map(f=>f.properties?.[field]);
+    const type = getFieldType(vals);
+    fd[field] = {type,values:vals};
+    if (type==='numeric') {
+      const nums = vals.map(Number).filter(v=>!isNaN(v));
+      const s = [...nums].sort((a,b)=>a-b);
+      fd[field].stats = {min:s[0],max:s[s.length-1],mean:nums.reduce((a,b)=>a+b,0)/nums.length,median:s[Math.floor(s.length/2)],nullCount:vals.filter(v=>v===null||v===undefined||v==='').length};
     } else {
-      const counts = {};
-      values.forEach(v => { const k = String(v ?? 'null'); counts[k] = (counts[k]||0)+1; });
-      fieldData[field].topValues = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-      fieldData[field].uniqueCount = Object.keys(counts).length;
-      fieldData[field].nullCount = values.filter(v => v === null || v === undefined || v === '').length;
+      const c={};
+      vals.forEach(v=>{const k=String(v??'null');c[k]=(c[k]||0)+1;});
+      fd[field].topValues = Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      fd[field].uniqueCount = Object.keys(c).length;
+      fd[field].nullCount = vals.filter(v=>v===null||v===undefined||v==='').length;
     }
   });
-
-  ds.fieldData = fieldData;
+  ds.fieldData = fd;
 }
 
 function updatePanels() {
-  const leftContent = document.getElementById('leftContent');
-  const rightContent = document.getElementById('rightContent');
-  const leftEmpty = document.getElementById('leftEmptyState');
-  const rightEmpty = document.getElementById('rightEmptyState');
-
-  if (datasets.length === 0) {
-    leftEmpty.style.display = '';
-    rightEmpty.style.display = '';
-    leftContent.style.display = 'none';
-    rightContent.style.display = 'none';
-    return;
+  const lc=document.getElementById('leftContent'), rc=document.getElementById('rightContent');
+  const le=document.getElementById('leftEmptyState'), re=document.getElementById('rightEmptyState');
+  if (datasets.length===0) {
+    le.style.display=''; re.style.display=''; lc.style.display='none'; rc.style.display='none'; return;
   }
+  le.style.display='none'; re.style.display='none'; lc.style.display='flex'; rc.style.display='flex';
+  const ds = datasets.find(d=>d.id===activeDatasetId)||datasets[datasets.length-1];
 
-  leftEmpty.style.display = 'none';
-  rightEmpty.style.display = 'none';
-  leftContent.style.display = 'flex';
-  rightContent.style.display = 'flex';
+  // Layers list
+  let html = '<div class="panel-title">Layers ('+datasets.length+')</div>';
+  html += datasets.map(d => {
+    const bc = d.crsSource==='prj' ? (d.crsLabel==='WGS84'?'wgs':'ok') : 'warn';
+    const bt = d.crsSource==='prj' ? 'CRS from .prj' : (d.crsSource==='user'?'User-defined':'Assumed WGS84');
+    return '<div class="layer-item'+(d.id===ds.id?' active-layer':'')+'" onclick="selectDataset('+d.id+')">'
+      +'<div class="layer-swatch" style="background:'+d.color+'"></div>'
+      +'<div class="layer-name" title="'+d.name+'">'+d.name+'</div>'
+      +'<span class="crs-badge '+bc+'" title="'+bt+'">'+d.crsLabel+'</span>'
+      +'<div class="layer-count">'+d.features.length.toLocaleString()+' ft</div>'
+      +'<div class="layer-actions" onclick="event.stopPropagation()">'
+      +'<button class="layer-btn" onclick="openTableModal('+d.id+')" title="View data table">&#8862;</button>'
+      +'<button class="layer-btn vis-btn'+(d.visible?'':' hidden-layer')+'" onclick="toggleLayer('+d.id+')">'+(d.visible?'&#128065;':'&#128683;')+'</button>'
+      +'<button class="layer-btn del-btn" onclick="removeLayer('+d.id+')">&#x2715;</button>'
+      +'</div></div>';
+  }).join('');
 
-  const activeDs = datasets.find(d => d.id === activeDatasetId) || datasets[datasets.length - 1];
-
-  // ---- LEFT PANEL ----
-  let layersHtml = `<div class="panel-title">Layers (${datasets.length})</div>`;
-  layersHtml += datasets.map(ds => `
-    <div class="layer-item ${ds.id === activeDs.id ? 'active-layer' : ''}" onclick="selectDataset(${ds.id})">
-      <div class="layer-swatch" style="background:${ds.color}"></div>
-      <div class="layer-name" title="${ds.name}">${ds.name}</div>
-      <div class="layer-count">${ds.features.length.toLocaleString()} ft</div>
-      <div class="layer-actions" onclick="event.stopPropagation()">
-        <button class="layer-btn vis-btn ${!ds.visible ? 'hidden-layer':''}" onclick="toggleLayer(${ds.id})" title="Toggle visibility">${ds.visible ? '👁' : '🚫'}</button>
-        <button class="layer-btn del-btn" onclick="removeLayer(${ds.id})" title="Remove layer">✕</button>
-      </div>
-    </div>
-  `).join('');
-
-  const ds = activeDs;
+  // Active layer stats
   const n = ds.features.length;
-  const features = ds.features;
-  const fields = ds.fields;
-  const fieldData = ds.fieldData;
+  const fields = ds.fields, fd = ds.fieldData;
+  const bc = ds.crsSource==='prj'?(ds.crsLabel==='WGS84'?'wgs':'ok'):'warn';
+  const bt = ds.crsSource==='prj'?'Read from .prj':(ds.crsSource==='user'?'User-defined':'Assumed WGS84');
 
-  // Bounding box
-  let minLng=Infinity, maxLng=-Infinity, minLat=Infinity, maxLat=-Infinity;
-  features.forEach(f => {
-    const g = f.geometry;
-    if (!g) return;
-    const coords = flatCoords(g);
-    coords.forEach(([lng, lat]) => {
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
+  let minLng=Infinity,maxLng=-Infinity,minLat=Infinity,maxLat=-Infinity;
+  ds.features.forEach(f => {
+    if (!f.geometry) return;
+    flatCoords(f.geometry).forEach(([lng,lat])=>{
+      if(lng<minLng)minLng=lng;if(lng>maxLng)maxLng=lng;if(lat<minLat)minLat=lat;if(lat>maxLat)maxLat=lat;
     });
   });
+  const geomTypes={};
+  ds.features.forEach(f=>{const t=f.geometry?.type||'Unknown';geomTypes[t]=(geomTypes[t]||0)+1;});
 
-  // Geometry types
-  const geomTypes = {};
-  features.forEach(f => {
-    const t = f.geometry?.type || 'Unknown';
-    geomTypes[t] = (geomTypes[t] || 0) + 1;
-  });
+  html += '<div class="panel-title" style="margin-top:2px">Active &mdash; <span style="color:'+ds.color+'">'+ds.name+'</span></div>';
+  html += '<div class="stat-card" style="border-left-color:'+ds.color+'"><div class="stat-label">Total Features</div><div class="stat-value">'+n.toLocaleString()+'</div>'
+    +'<div class="stat-sub" style="display:flex;align-items:center;gap:6px;margin-top:4px"><span class="crs-badge '+bc+'">'+ds.crsLabel+'</span><span>'+bt+'</span></div></div>';
 
-  const statsHtml = `
-    <div class="panel-title" style="margin-top:2px">
-      Active Layer — <span style="color:${ds.color}">${ds.name}</span>
-    </div>
-    <div class="stat-card" style="border-left-color:${ds.color}">
-      <div class="stat-label">Total Features</div>
-      <div class="stat-value">${n.toLocaleString()}</div>
-      <div class="stat-sub">${ds.name}</div>
-    </div>
+  html += '<div class="mini-stats">'
+    +'<div class="mini-stat"><div class="val">'+fields.length+'</div><div class="lbl">Fields</div></div>'
+    +'<div class="mini-stat"><div class="val">'+Object.keys(geomTypes).length+'</div><div class="lbl">Geom Types</div></div>'
+    +'<div class="mini-stat"><div class="val">'+(fd?Object.values(fd).filter(d=>d.type==='numeric').length:0)+'</div><div class="lbl">Numeric</div></div>'
+    +'<div class="mini-stat"><div class="val">'+(fd?Object.values(fd).filter(d=>d.type==='string').length:0)+'</div><div class="lbl">Text</div></div>'
+    +'</div>';
 
-    <div class="mini-stats">
-      <div class="mini-stat">
-        <div class="val">${fields.length}</div>
-        <div class="lbl">Fields</div>
-      </div>
-      <div class="mini-stat">
-        <div class="val">${Object.keys(geomTypes).length}</div>
-        <div class="lbl">Geom Types</div>
-      </div>
-      <div class="mini-stat">
-        <div class="val">${fieldData ? Object.values(fieldData).filter(d=>d.type==='numeric').length : 0}</div>
-        <div class="lbl">Numeric</div>
-      </div>
-      <div class="mini-stat">
-        <div class="val">${fieldData ? Object.values(fieldData).filter(d=>d.type==='string').length : 0}</div>
-        <div class="lbl">Text</div>
-      </div>
-    </div>
+  html += '<div class="panel-title" style="margin-top:4px">Geometry Types</div>';
+  html += Object.entries(geomTypes).map(([t,c],i)=>
+    '<div class="stat-card '+(i===1?'green':i===2?'pink':'')+'">'
+    +'<div class="stat-label">'+t+'</div><div class="stat-value">'+c.toLocaleString()+'</div>'
+    +'<div class="stat-sub">'+((c/n)*100).toFixed(1)+'% of features</div></div>'
+  ).join('');
 
-    <div class="panel-title" style="margin-top:4px">Geometry Types</div>
-    ${Object.entries(geomTypes).map(([t,c], i) => `
-      <div class="stat-card ${i===1?'green':i===2?'pink':''}">
-        <div class="stat-label">${t}</div>
-        <div class="stat-value">${c.toLocaleString()}</div>
-        <div class="stat-sub">${((c/n)*100).toFixed(1)}% of features</div>
-      </div>
-    `).join('')}
+  html += '<div class="panel-title" style="margin-top:4px">Bounding Box</div>'
+    +'<div class="bbox-grid">'
+    +'<div class="bbox-item"><div class="k">Min Lon</div><div class="v">'+(minLng===Infinity?'&mdash;':minLng.toFixed(4))+'</div></div>'
+    +'<div class="bbox-item"><div class="k">Max Lon</div><div class="v">'+(maxLng===-Infinity?'&mdash;':maxLng.toFixed(4))+'</div></div>'
+    +'<div class="bbox-item"><div class="k">Min Lat</div><div class="v">'+(minLat===Infinity?'&mdash;':minLat.toFixed(4))+'</div></div>'
+    +'<div class="bbox-item"><div class="k">Max Lat</div><div class="v">'+(maxLat===-Infinity?'&mdash;':maxLat.toFixed(4))+'</div></div>'
+    +'<div class="bbox-item"><div class="k">Lon Span</div><div class="v">'+(maxLng===Infinity?'&mdash;':(maxLng-minLng).toFixed(4)+'&deg;')+'</div></div>'
+    +'<div class="bbox-item"><div class="k">Lat Span</div><div class="v">'+(maxLat===Infinity?'&mdash;':(maxLat-minLat).toFixed(4)+'&deg;')+'</div></div>'
+    +'</div>';
 
-    <div class="panel-title" style="margin-top:4px">Bounding Box</div>
-    <div class="bbox-grid">
-      <div class="bbox-item"><div class="k">Min Lon</div><div class="v">${minLng===Infinity?'—':minLng.toFixed(4)}</div></div>
-      <div class="bbox-item"><div class="k">Max Lon</div><div class="v">${maxLng===-Infinity?'—':maxLng.toFixed(4)}</div></div>
-      <div class="bbox-item"><div class="k">Min Lat</div><div class="v">${minLat===Infinity?'—':minLat.toFixed(4)}</div></div>
-      <div class="bbox-item"><div class="k">Max Lat</div><div class="v">${maxLat===-Infinity?'—':maxLat.toFixed(4)}</div></div>
-      <div class="bbox-item"><div class="k">Lon Span</div><div class="v">${maxLng===Infinity?'—':(maxLng-minLng).toFixed(4)+'°'}</div></div>
-      <div class="bbox-item"><div class="k">Lat Span</div><div class="v">${maxLat===Infinity?'—':(maxLat-minLat).toFixed(4)+'°'}</div></div>
-    </div>
+  html += '<div class="panel-title" style="margin-top:4px">Fields <span style="color:var(--muted);font-size:9px">/ click to colour map</span></div>';
+  html += fields.map(f=>'<div class="field-item" id="fi-'+ds.id+'-'+f.replace(/[^a-z0-9]/gi,'_')+'" onclick="showFieldAnalysis(\''+f.replace(/'/g,"\\'")+"',"+ds.id+')">'
+    +'<span class="field-name">'+f+'</span>'
+    +'<span class="field-type '+(fd[f].type==='numeric'?'num':'str')+'">'+fd[f].type+'</span>'
+    +'</div>').join('');
 
-    <div class="panel-title" style="margin-top:4px">Fields <span style="color:var(--muted);font-size:9px">/ click to colour map</span></div>
-    ${fields.map(f => `
-      <div class="field-item" id="fi-${ds.id}-${f.replace(/[^a-z0-9]/gi,'_')}" onclick="showFieldAnalysis('${f.replace(/'/g,"\\'")}', ${ds.id})">
-        <span class="field-name">${f}</span>
-        <span class="field-type ${fieldData[f].type === 'numeric' ? 'num':'str'}">${fieldData[f].type}</span>
-      </div>
-    `).join('')}
-  `;
-
-  leftContent.innerHTML = layersHtml + statsHtml;
+  lc.innerHTML = html;
   renderRightPanel(ds);
 }
 
 function renderRightPanel(ds) {
-  const rightContent = document.getElementById('rightContent');
-  const { fieldData, fields, features } = ds;
+  const rc = document.getElementById('rightContent');
+  const {fieldData:fd, fields, features} = ds;
   const n = features.length;
+  const catFields = fields.filter(f=>fd[f].type==='string'&&fd[f].uniqueCount>1&&fd[f].uniqueCount<=50);
+  const numFields = fields.filter(f=>fd[f].type==='numeric');
 
-  const catFields = fields.filter(f => fieldData[f].type === 'string' && fieldData[f].uniqueCount > 1 && fieldData[f].uniqueCount <= 50);
-  const numFields = fields.filter(f => fieldData[f].type === 'numeric');
-
-  let catHtml = '';
-  if (catFields.length > 0) {
-    const topField = catFields.sort((a,b) => fieldData[a].uniqueCount - fieldData[b].uniqueCount)[0];
-    const d = fieldData[topField];
-    const maxCount = d.topValues[0][1];
-    catHtml = `
-      <div class="panel-title">Distribution — ${topField}</div>
-      <div class="bar-chart">
-        ${d.topValues.map(([k,c],i) => `
-          <div class="bar-row">
-            <div class="bar-label" title="${k}">${k}</div>
-            <div class="bar-track">
-              <div class="bar-fill" style="width:${(c/maxCount*100).toFixed(1)}%; background:${COLORS[i%COLORS.length]};"></div>
-            </div>
-            <div class="bar-count">${c}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
+  let catHtml='';
+  if (catFields.length>0) {
+    const tf = [...catFields].sort((a,b)=>fd[a].uniqueCount-fd[b].uniqueCount)[0];
+    const d=fd[tf]; const mx=d.topValues[0][1];
+    catHtml='<div class="panel-title">Distribution &mdash; '+tf+'</div><div class="bar-chart">'
+      +d.topValues.map(([k,c],i)=>'<div class="bar-row"><div class="bar-label" title="'+k+'">'+k+'</div>'
+        +'<div class="bar-track"><div class="bar-fill" style="width:'+(c/mx*100).toFixed(1)+'%;background:'+COLORS[i%COLORS.length]+'"></div></div>'
+        +'<div class="bar-count">'+c+'</div></div>').join('')
+      +'</div>';
   }
-
-  let numHtml = '';
-  if (numFields.length > 0) {
-    numHtml = `
-      <div class="panel-title" style="margin-top:4px">Numeric Summary</div>
-      ${numFields.slice(0,6).map(f => {
-        const s = fieldData[f].stats;
-        return `
-          <div class="stat-card" style="padding:9px 12px">
-            <div class="stat-label">${f}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:5px">
-              <div style="text-align:center">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Min</div>
-                <div style="font-size:12px;font-weight:700;color:var(--accent2)">${fmt(s.min)}</div>
-              </div>
-              <div style="text-align:center">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Mean</div>
-                <div style="font-size:12px;font-weight:700;color:var(--accent)">${fmt(s.mean)}</div>
-              </div>
-              <div style="text-align:center">
-                <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Max</div>
-                <div style="font-size:12px;font-weight:700;color:var(--accent3)">${fmt(s.max)}</div>
-              </div>
-            </div>
-            ${s.nullCount > 0 ? `<div style="font-size:9px;color:var(--muted);margin-top:4px">${s.nullCount} null values</div>` : ''}
-          </div>
-        `;
-      }).join('')}
-    `;
+  let numHtml='';
+  if (numFields.length>0) {
+    numHtml='<div class="panel-title" style="margin-top:4px">Numeric Summary</div>'
+      +numFields.slice(0,6).map(f=>{
+        const s=fd[f].stats;
+        return '<div class="stat-card" style="padding:9px 12px"><div class="stat-label">'+f+'</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:5px">'
+          +'<div style="text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Min</div><div style="font-size:12px;font-weight:700;color:var(--accent2)">'+fmt(s.min)+'</div></div>'
+          +'<div style="text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Mean</div><div style="font-size:12px;font-weight:700;color:var(--accent)">'+fmt(s.mean)+'</div></div>'
+          +'<div style="text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Max</div><div style="font-size:12px;font-weight:700;color:var(--accent3)">'+fmt(s.max)+'</div></div>'
+          +'</div>'+(s.nullCount>0?'<div style="font-size:9px;color:var(--muted);margin-top:4px">'+s.nullCount+' null values</div>':'')+'</div>';
+      }).join('');
   }
+  const totalCells=n*fields.length; let nullCells=0;
+  fields.forEach(f=>{nullCells+=(fd[f].nullCount||0);});
+  const comp=totalCells>0?((1-nullCells/totalCells)*100).toFixed(1):100;
 
-  const totalCells = n * fields.length;
-  let nullCells = 0;
-  fields.forEach(f => { nullCells += (fieldData[f].nullCount || 0); });
-  const completeness = totalCells > 0 ? ((1 - nullCells/totalCells)*100).toFixed(1) : 100;
-
-  rightContent.innerHTML = `
-    <div class="panel-title">Data Quality</div>
-    <div class="stat-card green">
-      <div class="stat-label">Completeness</div>
-      <div class="stat-value">${completeness}%</div>
-      <div class="stat-sub">${nullCells} null values across ${totalCells.toLocaleString()} cells</div>
-    </div>
-    <div class="mini-stats">
-      <div class="mini-stat">
-        <div class="val" style="color:var(--accent3)">${n}</div>
-        <div class="lbl">Records</div>
-      </div>
-      <div class="mini-stat">
-        <div class="val" style="color:var(--accent3)">${fields.length}</div>
-        <div class="lbl">Attributes</div>
-      </div>
-    </div>
-    ${catHtml}
-    ${numHtml}
-    <div class="panel-title" style="margin-top:4px">Cardinality</div>
-    ${fields.filter(f=>fieldData[f].type==='string').slice(0,8).map(f => {
-      const d = fieldData[f];
-      const ratio = (d.uniqueCount/n*100).toFixed(0);
-      return `
-        <div class="bar-row" style="font-size:10px">
-          <div class="bar-label" title="${f}">${f}</div>
-          <div class="bar-track">
-            <div class="bar-fill" style="width:${Math.min(ratio,100)}%; background: ${ratio > 80 ? 'var(--accent2)' : ratio > 40 ? 'var(--accent)' : 'var(--accent3)'};"></div>
-          </div>
-          <div class="bar-count">${d.uniqueCount}</div>
-        </div>
-      `;
-    }).join('')}
-  `;
+  rc.innerHTML='<div class="panel-title">Data Quality</div>'
+    +'<div class="stat-card green"><div class="stat-label">Completeness</div><div class="stat-value">'+comp+'%</div>'
+    +'<div class="stat-sub">'+nullCells+' null values across '+totalCells.toLocaleString()+' cells</div></div>'
+    +'<div class="mini-stats">'
+    +'<div class="mini-stat"><div class="val" style="color:var(--accent3)">'+n+'</div><div class="lbl">Records</div></div>'
+    +'<div class="mini-stat"><div class="val" style="color:var(--accent3)">'+fields.length+'</div><div class="lbl">Attributes</div></div>'
+    +'</div>'+catHtml+numHtml
+    +'<div class="panel-title" style="margin-top:4px">Cardinality</div>'
+    +fields.filter(f=>fd[f].type==='string').slice(0,8).map(f=>{
+      const d=fd[f]; const ratio=(d.uniqueCount/n*100).toFixed(0);
+      return '<div class="bar-row" style="font-size:10px"><div class="bar-label" title="'+f+'">'+f+'</div>'
+        +'<div class="bar-track"><div class="bar-fill" style="width:'+Math.min(ratio,100)+'%;background:'+(ratio>80?'var(--accent2)':ratio>40?'var(--accent)':'var(--accent3)')+'"></div></div>'
+        +'<div class="bar-count">'+d.uniqueCount+'</div></div>';
+    }).join('');
 }
 
-function selectDataset(id) {
-  activeDatasetId = id;
-  updatePanels();
+// Table modal
+function openTableModal(dsId) {
+  tableDs = datasets.find(d=>d.id===dsId); if(!tableDs) return;
+  tableSortCol=null; tableSortDir=1; tablePage=0;
+  document.getElementById('tableSearchInput').value='';
+  document.getElementById('tableModalTitle').textContent=tableDs.name;
+  document.getElementById('tableModalMeta').textContent=tableDs.crsLabel+' · '+tableDs.features.length.toLocaleString()+' features';
+  applyTableFilter('');
+  document.getElementById('tableModal').classList.add('open');
 }
-
-function toggleLayer(id) {
-  const ds = datasets.find(d => d.id === id);
-  if (!ds) return;
-  ds.visible = !ds.visible;
-  if (ds.visible) {
-    ds.layer.addTo(map);
-  } else {
-    map.removeLayer(ds.layer);
-  }
-  updatePanels();
+function closeTableModal() { document.getElementById('tableModal').classList.remove('open'); tableDs=null; }
+function onTableSearch() { tablePage=0; applyTableFilter(document.getElementById('tableSearchInput').value); }
+function applyTableFilter(q) {
+  if (!tableDs) return;
+  const lq=q.toLowerCase();
+  tableFilteredRows = tableDs.features.filter(f => !lq || Object.values(f.properties||{}).some(v=>String(v??'').toLowerCase().includes(lq)));
+  renderTable();
 }
-
-function removeLayer(id) {
-  const idx = datasets.findIndex(d => d.id === id);
-  if (idx === -1) return;
-  const ds = datasets[idx];
-  map.removeLayer(ds.layer);
-  datasets.splice(idx, 1);
-  if (activeDatasetId === id) {
-    activeDatasetId = datasets.length > 0 ? datasets[datasets.length - 1].id : null;
-  }
-  if (datasets.length === 0) {
-    document.getElementById('statusPill').textContent = 'NO FILES LOADED';
-    document.getElementById('statusPill').classList.remove('loaded');
-  } else {
-    document.getElementById('statusPill').textContent = datasets.length + ' LAYER' + (datasets.length > 1 ? 'S' : '') + ' LOADED';
-  }
-  updatePanels();
-}
-
-function showFieldAnalysis(fieldName, dsId) {
-  const ds = datasets.find(d => d.id === dsId);
-  if (!ds) return;
-  const d = ds.fieldData?.[fieldName];
-  if (!d) return;
-
-  // Highlight active field item
-  document.querySelectorAll('.field-item').forEach(el => el.classList.remove('active'));
-  const safeKey = `fi-${dsId}-${fieldName.replace(/[^a-z0-9]/gi,'_')}`;
-  document.getElementById(safeKey)?.classList.add('active');
-
-  if (d.type === 'string' && d.uniqueCount <= 20) {
-    const colorMap = {};
-    d.topValues.forEach(([k], i) => { colorMap[k] = COLORS[i % COLORS.length]; });
-    ds.layer.setStyle(feature => {
-      const v = String(feature.properties?.[fieldName] ?? 'null');
-      return { color: colorMap[v] || '#999', fillColor: colorMap[v] || '#ccc', fillOpacity: 0.4, weight: 1.5 };
+function renderTable() {
+  if (!tableDs) return;
+  const fields=tableDs.fields;
+  const total=tableFilteredRows.length;
+  const totalPages=Math.ceil(total/PAGE_SIZE)||1;
+  if (tablePage>=totalPages) tablePage=totalPages-1;
+  let pageRows=[...tableFilteredRows.slice(tablePage*PAGE_SIZE,(tablePage+1)*PAGE_SIZE)];
+  if (tableSortCol!==null) {
+    pageRows.sort((a,b)=>{
+      const va=a.properties?.[tableSortCol]??'', vb=b.properties?.[tableSortCol]??'';
+      if(!isNaN(Number(va))&&!isNaN(Number(vb))) return (Number(va)-Number(vb))*tableSortDir;
+      return String(va).localeCompare(String(vb))*tableSortDir;
     });
-  } else if (d.type === 'numeric') {
-    const { min, max } = d.stats;
-    const range = max - min || 1;
-    ds.layer.setStyle(feature => {
-      const v = Number(feature.properties?.[fieldName]);
-      const t = (v - min) / range;
-      // Blue → orange gradient
-      const r = Math.round(37 + t * (234 - 37));
-      const g = Math.round(99 + t * (88 - 99));
-      const b = Math.round(235 + t * (12 - 235));
-      return { color: `rgb(${r},${g},${b})`, fillColor: `rgb(${r},${g},${b})`, fillOpacity: 0.45, weight: 1.5 };
+  }
+  document.getElementById('tableSearchCount').textContent=total!==tableDs.features.length?total.toLocaleString()+' matching':'';
+  document.getElementById('tableRowCount').textContent=total.toLocaleString()+' rows · page '+(tablePage+1)+' of '+totalPages;
+  document.getElementById('pageInfo').textContent='Page '+(tablePage+1)+' of '+totalPages;
+  document.getElementById('pagePrev').disabled=tablePage===0;
+  document.getElementById('pageNext').disabled=tablePage>=totalPages-1;
+  const thHtml=fields.map(f=>'<th class="'+(tableSortCol===f?(tableSortDir===1?'sort-asc':'sort-desc'):'')+'" onclick="sortTable(\''+f.replace(/'/g,"\\'")+'\')">'+(f)+'</th>').join('');
+  const tbHtml=pageRows.map(f=>'<tr>'+fields.map(field=>{const v=f.properties?.[field];return '<td title="'+String(v??'').replace(/"/g,'&quot;')+'">'+(v===null||v===undefined?'<span style="color:var(--muted)">null</span>':v)+'</td>';}).join('')+'</tr>').join('');
+  document.getElementById('tableScrollArea').innerHTML='<table class="data-table"><thead><tr>'+thHtml+'</tr></thead><tbody>'+tbHtml+'</tbody></table>';
+}
+function sortTable(f) { tableSortCol===f ? tableSortDir*=-1 : (tableSortCol=f,tableSortDir=1); renderTable(); }
+function changePage(dir) { const tp=Math.ceil(tableFilteredRows.length/PAGE_SIZE)||1; tablePage=Math.max(0,Math.min(tp-1,tablePage+dir)); renderTable(); }
+
+function exportCSV() {
+  if (!tableDs) return;
+  const fields=tableDs.fields;
+  const header=fields.map(f=>'"'+f.replace(/"/g,'""')+'"').join(',');
+  const body=tableFilteredRows.map(f=>fields.map(field=>{const v=f.properties?.[field]??'';return typeof v==='string'?'"'+v.replace(/"/g,'""')+'"':v;}).join(',')).join('\n');
+  dl(tableDs.name+'.csv','text/csv',header+'\n'+body);
+}
+function exportGeoJSON() {
+  if (!tableDs) return;
+  dl(tableDs.name+'.geojson','application/geo+json',JSON.stringify({type:'FeatureCollection',features:tableFilteredRows},null,2));
+}
+function dl(name,mime,text) {
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:mime})); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+function selectDataset(id){activeDatasetId=id;updatePanels();}
+function toggleLayer(id){const ds=datasets.find(d=>d.id===id);if(!ds)return;ds.visible=!ds.visible;ds.visible?ds.layer.addTo(map):map.removeLayer(ds.layer);updatePanels();}
+function removeLayer(id){
+  const idx=datasets.findIndex(d=>d.id===id);if(idx===-1)return;
+  map.removeLayer(datasets[idx].layer);datasets.splice(idx,1);
+  if(activeDatasetId===id)activeDatasetId=datasets.length>0?datasets[datasets.length-1].id:null;
+  updateStatusPill();updatePanels();
+}
+
+function showFieldAnalysis(fn,dsId){
+  const ds=datasets.find(d=>d.id===dsId);if(!ds)return;
+  const d=ds.fieldData?.[fn];if(!d)return;
+  document.querySelectorAll('.field-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('fi-'+dsId+'-'+fn.replace(/[^a-z0-9]/gi,'_'))?.classList.add('active');
+  if(d.type==='string'&&d.uniqueCount<=20){
+    const cm={};d.topValues.forEach(([k],i)=>{cm[k]=COLORS[i%COLORS.length];});
+    ds.layer.setStyle(f=>{const v=String(f.properties?.[fn]??'null');return{color:cm[v]||'#999',fillColor:cm[v]||'#ccc',fillOpacity:0.4,weight:1.5};});
+  } else if(d.type==='numeric'){
+    const{min,max}=d.stats;const range=max-min||1;
+    ds.layer.setStyle(f=>{const v=Number(f.properties?.[fn]);const t=(v-min)/range;
+      const r=Math.round(37+t*(234-37)),g=Math.round(99+t*(88-99)),b=Math.round(235+t*(12-235));
+      return{color:'rgb('+r+','+g+','+b+')',fillColor:'rgb('+r+','+g+','+b+')',fillOpacity:0.45,weight:1.5};
     });
   }
 }
 
-function flatCoords(geometry) {
-  const t = geometry.type;
-  const c = geometry.coordinates;
-  if (t === 'Point') return [c];
-  if (t === 'MultiPoint' || t === 'LineString') return c;
-  if (t === 'MultiLineString' || t === 'Polygon') return c.flat();
-  if (t === 'MultiPolygon') return c.flat(2);
-  return [];
+function updateStatusPill(){
+  const p=document.getElementById('statusPill');
+  if(datasets.length===0){p.textContent='NO FILES LOADED';p.classList.remove('loaded');}
+  else{p.textContent=datasets.length+' LAYER'+(datasets.length>1?'S':'')+' LOADED';p.classList.add('loaded');}
 }
+function setLoading(on,text){
+  document.getElementById('loadingOverlay').style.display=on?'flex':'none';
+  if(text)document.getElementById('loadingText').textContent=text;
+}
+function flatCoords(g){const t=g.type,c=g.coordinates;if(t==='Point')return[c];if(t==='MultiPoint'||t==='LineString')return c;if(t==='MultiLineString'||t==='Polygon')return c.flat();if(t==='MultiPolygon')return c.flat(2);return[];}
+function getFieldType(vals){const nn=vals.filter(v=>v!==null&&v!==undefined&&v!=='');if(!nn.length)return'empty';return nn.filter(v=>!isNaN(Number(v))&&v!=='').length/nn.length>0.8?'numeric':'string';}
+function fmt(n){if(n===undefined||n===null)return'N/A';if(Math.abs(n)>=1e6)return(n/1e6).toFixed(2)+'M';if(Math.abs(n)>=1e3)return(n/1e3).toFixed(2)+'K';return Number(n.toFixed(4)).toString();}
 
-function getFieldType(values) {
-  const nonNull = values.filter(v => v !== null && v !== undefined && v !== '');
-  if (nonNull.length === 0) return 'empty';
-  const nums = nonNull.filter(v => !isNaN(Number(v)) && v !== '');
-  if (nums.length / nonNull.length > 0.8) return 'numeric';
-  return 'string';
-}
-
-function fmt(n) {
-  if (n === undefined || n === null) return 'N/A';
-  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2)+'M';
-  if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(2)+'K';
-  return Number(n.toFixed(4)).toString();
-}
+document.getElementById('tableModal').addEventListener('click',e=>{if(e.target===document.getElementById('tableModal'))closeTableModal();});
 </script>
 </body>
 </html>
